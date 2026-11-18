@@ -1,0 +1,45 @@
+# The pod mounts the CSI volume (this triggers the fetch from Key Vault and creates the
+# Kubernetes secret `evh-conn`), then reads it into an env var.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-consumer
+  namespace: <namespace>
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: kafka-consumer }
+  template:
+    metadata:
+      labels: { app: kafka-consumer }
+    spec:
+      serviceAccountName: kafka-consumer-sa
+      imagePullSecrets:
+        - name: <image-pull-secret>                # existing registry pull secret in the namespace
+      containers:
+        - name: consumer
+          image: <registry>/<repo>/kafka-consumer:1
+          command: ["python", "consumer_connstring.py"]
+          env:
+            - name: EVENTHUB_NAMESPACE
+              value: "<event-hubs-namespace>"
+            - name: EVENTHUB_NAME
+              value: "<event-hub>"
+            - name: CONSUMER_GROUP
+              value: "$Default"
+            - name: EVENTHUB_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: evh-conn
+                  key: connection-string
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: kafka-consumer-spc

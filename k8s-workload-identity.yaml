@@ -1,0 +1,31 @@
+# Same Deployment after the migration: no secret, no CSI volume, no connection string env var.
+# Reuses the service account kafka-consumer-sa (serviceaccount-connstring.yaml) and its identity.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-consumer
+  namespace: <namespace>
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: kafka-consumer }
+  template:
+    metadata:
+      labels:
+        app: kafka-consumer
+        azure.workload.identity/use: "true"      # makes the webhook inject the token and AZURE_* env vars
+    spec:
+      serviceAccountName: kafka-consumer-sa
+      imagePullSecrets:
+        - name: <image-pull-secret>
+      containers:
+        - name: consumer
+          image: <registry>/<repo>/kafka-consumer:2
+          command: ["python", "consumer_workload_identity.py"]
+          env:
+            - name: EVENTHUB_NAMESPACE
+              value: "<event-hubs-namespace>"
+            - name: EVENTHUB_NAME
+              value: "<event-hub>"
+            - name: CONSUMER_GROUP
+              value: "$Default"
